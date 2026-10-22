@@ -145,8 +145,9 @@ Configure the camera and experiment settings first — see [Software](Software/)
 6. Minimise external light — turn the room lights off, or cover the box with black fabric (**recommended**).
 
 7. Set the save directory, camera serial number, subject ID, session ID and trial length, then click
-   **Start**. A black console window opens as recording starts: that is FFmpeg encoding the video.
-   Leave it open and do not type in it, because closing it stops the recording.
+   **Start**. Bonsai has a black console window open beside it from launch, titled with the path to
+   `Bonsai.exe`; FFmpeg prints its encoding progress there while recording. Leave it open and do not
+   type in it: closing it, or pressing Ctrl+C in it, closes Bonsai at once and ends the recording.
 
 8. Recording stops automatically at the trial length, saving a video and a CSV of the behavioural data.
 
@@ -165,7 +166,11 @@ Configure the camera and experiment settings first — see [Software](Software/)
   [Installing the software](#installing-the-software), then restart Bonsai.
 - **Recording stops with "Pipe is broken"** — FFmpeg started but stopped encoding. At the start of a
   recording, the black console window shows why, usually that Intel Quick Sync is unavailable on this
-  machine; run `Setup.cmd` again to check. Mid-session, the console window was probably closed.
+  machine; run `Setup.cmd` again to check. Mid-session, someone probably typed in the console window
+  (`q` stops FFmpeg).
+- **Bonsai disappeared mid-recording with no message** — the console window was closed, or Ctrl+C was
+  pressed in it. The video up to that moment is kept and plays; the CSV loses its last second or so,
+  and its final line may be cut short.
 - **Preview or CSV window missing** — reopen them manually, as below.
 
 ### Reopening the camera preview

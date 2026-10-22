@@ -203,11 +203,14 @@ Check the exposure still fits inside the new frame period.
 
 The `VideoWriter` node in **logging** then **LogVideo** comes from `Bonsai.FFmpeg`. It does not
 compress anything itself: it starts `ffmpeg.exe` and streams the raw frames to it, and ffmpeg encodes
-H.264 on Intel Quick Sync, the hardware encoder in Intel's integrated graphics. A black console window
-opens with each recording; that is ffmpeg, and it shows the reason if encoding fails. Leave it open
-and do not type in it: closing it, or pressing `q` or Ctrl+C in it, stops ffmpeg, and the recording
-stops with "Pipe is broken". If ffmpeg is not installed at all, no window opens and the recording
-stops at once with "The system cannot find the file specified".
+H.264 on Intel Quick Sync, the hardware encoder in Intel's integrated graphics. `Bonsai.exe` is a
+console program, so a black console window is open beside the editor from launch; ffmpeg shares it,
+prints its progress there, and shows the reason there if encoding fails. Leave it open and do not
+type in it. Pressing `q` in it stops ffmpeg alone, and the recording stops with "Pipe is broken".
+Closing the window, or pressing Ctrl+C in it, kills Bonsai and ffmpeg together with no message: the
+video up to that moment is finalised and plays, but the CSV loses its unwritten last second or so.
+Pressing **Stop** in Bonsai is safe: ffmpeg finishes the file within a second. If ffmpeg is not
+installed at all, the recording stops at once with "The system cannot find the file specified".
 
 Encoding used to happen inside Bonsai, on a single thread that needed most of a CPU core at 1440 x
 1080 and 50 Hz. Whenever anything else was running it fell behind, the unwritten frames queued in
