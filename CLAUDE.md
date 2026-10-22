@@ -23,7 +23,7 @@ Open-source hardware and software for a mouse behaviour box: 3D-printed parts pl
 
 There is no build system, test suite or CI in the repo (no package.json, pyproject, Makefile or workflows). The only executable path is Windows setup:
 
-- `Software\Setup.cmd` runs `Setup.ps1` from `Software/Behaviour_Box/.bonsai/` with `powershell -ExecutionPolicy Bypass`. It checks the Spinnaker SDK version, checks `local_packages/` is non-empty, downloads Bonsai if `Bonsai.exe` is absent, then restores packages with `Bonsai.exe --no-editor`.
+- `Software\Setup.cmd` runs `Setup.ps1` from `Software/Behaviour_Box/.bonsai/` with `powershell -ExecutionPolicy Bypass`. It checks the Spinnaker SDK version, checks FFmpeg is on PATH and can encode `h264_qsv`, checks `local_packages/` is non-empty, downloads Bonsai if `Bonsai.exe` is absent, then restores packages with `Bonsai.exe --no-editor`.
 - Run the workflow by starting Bonsai, then File, Open, `Behaviour_Box.bonsai`. Never launch the `.bonsai` file directly.
 - Verification is manual: open the workflow, check the live camera preview, record a short session, inspect `LogData.csv`.
 
@@ -32,13 +32,16 @@ There is no build system, test suite or CI in the repo (no package.json, pyproje
 - Docs are Markdown with one paragraph per line in the Software and Assembly files; keep tables aligned with the prose that cites them.
 - The workflow exposes per-recording and rare settings on the top-level Properties panel through `ExternalizedMapping` entries in `Behaviour_Box.bonsai` (save directory, camera serial, subject ID, session ID, trial length, `PortName`, `ExposureTime`, `Gain`, `Binning`, `TrackingThreshold`, `CountsPerRev`, `WheelDiameterMm`). The workflow is organised in `metadata` and `logging` groups (`BehaviorBoards`, `LogVideo`, `RunningWheel`, `TotalFrame`, `FormatFileName`, `WheelDistanceCm` among the named nodes).
 - Output folder pattern is `<save dir>\sub-<SubjectId>\ses-<SessionId>_date-<UTC timestamp>` holding `LogData.csv` and `VideoData_Camera.avi`.
-- Constants quoted in several docs must stay consistent with the workflow: 50 Hz, 10 ms exposure, 5 dB gain, binning 1 (1440 x 1080), `CountsPerRev` 4096, wheel 150 mm, tracking threshold 35, default `PortName` COM3, Spinnaker 4.2.0.83.
+- Constants quoted in several docs must stay consistent with the workflow: 50 Hz, 10 ms exposure, 5 dB gain, binning 1 (1440 x 1080), `CountsPerRev` 4096, wheel 150 mm, tracking threshold 35 (centre of mass of all thresholded pixels, no blob detection), H.264 via FFmpeg on Intel Quick Sync, default `PortName` COM3, Spinnaker 4.2.0.83.
 - Part names and dimensions appear in `Assembly/README.md`, `Assembly/Parts/README.md` and the main README build table; update all together.
 
 ## Traps
 
 - Spinnaker SDK must be exactly 4.2.0.83 (Bonsai.Spinnaker 0.9.1 is version-locked to it). The version appears in `Setup.ps1` (`$requiredSpinnaker`), `README.md` and `Software/README.md`; change all three.
 - Changing the encoder or wheel means changing `CountsPerRev` or `WheelDiameterMm`, otherwise `WheelDistance` is silently wrong. The BOM notes and `Software/README.md` quote the alternatives (1440 for the 360 ppr Omron).
+- The `VideoWriter` in `LogVideo` is `Bonsai.FFmpeg`'s: it starts `ffmpeg.exe` from PATH and pipes raw frames to it, with the codec in `OutputArguments`. FFmpeg is installed separately (winget `Gyan.FFmpeg`), not by `Setup.ps1`; without it a recording stops at once with "The system cannot find the file specified". "Pipe is broken" means ffmpeg started and then failed or was closed (bad `OutputArguments`, no Quick Sync, or someone closed its console window). Do not switch back to the Bonsai.Vision writer: its single encoder thread fell behind at 1440 x 1080, 50 Hz on the N150 and the backlog filled RAM.
+- The preview windows in the `.layout` sit on the two `SampleInterval` nodes (LogVideo indices 28 and 29), not on the writers, so they draw at 5 Hz. Adding or removing LogVideo nodes renumbers them; update the layout to match.
+- `.layout` `Index` values follow Bonsai's own sorted node order, which differs from the order in the `.bonsai` file after hand edits. `LogVideo` is node 4 of `logging` in the file but index 5 in the layout, and 5 is correct (4 lands on the `FrameRate` mapping and raises "visualizer not compatible"). Do not "fix" it to the file index; after any structural edit, confirm in a live run that the preview windows open.
 - Changing frame rate needs three edits together: `Trigger0Frequency` on `CameraTriggerController`, the frames-per-second multiplier in the `logging` group, and `FrameRate` on `VideoWriter`. Check exposure still fits the frame period.
 - The encoder board mode is Position, deliberately; the workflow differences, unwraps and accumulates. Do not switch to Displacement.
 - Frames are paired with Harp trigger events by arrival order, so a dropped trigger shifts later timestamps; the first CSV row is expected to be wrong.

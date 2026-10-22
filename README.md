@@ -73,17 +73,23 @@ unit we have found that clears the bar, so its specification is the floor:
 | | Minimum |
 |---|---|
 | CPU | 4-core x86, Intel N-series or PT7505 class |
+| Graphics | Intel integrated graphics with Quick Sync, for the default video encoder |
 | RAM | 16 GB |
 | Storage | 512 GB NVMe SSD |
 | USB | One USB 3.2 Gen 1 Type-A port dedicated to the camera |
 | OS | Windows 11, for Bonsai and the Spinnaker SDK |
 
-Two things to watch:
+Three things to watch:
 
 - **No PCIe slot** on a mini PC, so the camera runs from a built-in port rather than an expansion card.
-- **Storage** — compressed video runs at roughly 4-16 GB per hour, so 512 GB holds days rather than
-  weeks. Uncompressed it would fill in under two hours, at the shipped 1440 x 1080 and 50 Hz. Binning
-  2 quarters all of these figures, at half the resolution in each direction.
+- **Intel graphics** — the video is encoded by Intel Quick Sync, the hardware encoder in Intel's
+  integrated graphics, which leaves the CPU free. On a machine without it, switch the encoder to x264
+  as described in [Software](Software/).
+- **Storage** — compressed video size depends on the scene and on sensor noise, so on gain. Measured
+  on a textured scene, it was about 4 GB per hour at 3 ms exposure and 1 dB gain, and about 9 GB per
+  hour at the shipped 10 ms and 5 dB; a plain arena comes in somewhat lower. A 512 GB disk holds 50 to
+  130 hours of recording. Uncompressed it would fill in under two hours, at the shipped 1440 x 1080
+  and 50 Hz. Binning 2 quarters all of these figures, at half the resolution in each direction.
 
 ## Build guide
 
@@ -94,7 +100,7 @@ Four steps, a couple of days of printing and half an hour of assembly.
 | 1. Print | Six parts from five STLs in [`Assembly/Parts`](Assembly/Parts/): arena, lid, camera holder, wheel, and the thumb screw twice. 15% infill, no supports, three plates on a standard Bambu Lab printer or equivalent. | [Assembly](Assembly/) |
 | 2. Assemble | Mount the encoder, fit the wheel to its D-shaft, clamp the camera in its holder with the lens, and line three walls with the IR strip. 20-30 minutes. | [Assembly](Assembly/) |
 | 3. Wire | Camera to computer over locking USB, GPIO trigger and encoder to the Harp board. | [Wiring](Assembly/Wiring.md) |
-| 4. Software | Install the Spinnaker SDK, run `Setup.cmd`, open the workflow. | [Software](Software/) |
+| 4. Software | Install the Spinnaker SDK and FFmpeg, run `Setup.cmd`, open the workflow. | [Software](Software/) |
 
 ### Installing the software
 
@@ -104,10 +110,14 @@ Order matters: Bonsai cannot see the camera without the Spinnaker driver already
    [Teledyne Vision Solutions](https://www.teledynevisionsolutions.com/support/support-center/software-firmware-downloads/iis/spinnaker-sdk-download/spinnaker-sdk--download-files/?pn=Spinnaker+SDK&vn=Spinnaker+SDK).
    The version must match exactly; the download page defaults to the latest, so choose deliberately.
    An account is required, so this step cannot be scripted.
-2. **Bonsai** — run `Software\Setup.cmd`. It downloads Bonsai and
+2. **FFmpeg** — encodes the video. In a terminal, run `winget install --id Gyan.FFmpeg -e`, then
+   close the terminal so the next one sees it on PATH. This installs it for the current Windows
+   account only; if more than one account records on this computer, run it from an administrator
+   terminal with `--scope machine` added.
+3. **Bonsai** — run `Software\Setup.cmd`. It downloads Bonsai and
    restores every package from `Bonsai.config`, and warns if Spinnaker is missing or the wrong
-   version. Nothing else needs installing by hand.
-3. **Open the workflow** — start Bonsai, then **File → Open** →
+   version, or if FFmpeg is missing or cannot use Intel Quick Sync.
+4. **Open the workflow** — start Bonsai, then **File → Open** →
    `Behaviour_Box.bonsai`. Do not launch the workflow file directly: this project relies on
    compatibility patches.
 
@@ -135,7 +145,8 @@ Configure the camera and experiment settings first — see [Software](Software/)
 6. Minimise external light — turn the room lights off, or cover the box with black fabric (**recommended**).
 
 7. Set the save directory, camera serial number, subject ID, session ID and trial length, then click
-   **Start**.
+   **Start**. A black console window opens as recording starts: that is FFmpeg encoding the video.
+   Leave it open and do not type in it, because closing it stops the recording.
 
 8. Recording stops automatically at the trial length, saving a video and a CSV of the behavioural data.
 
@@ -149,22 +160,32 @@ Configure the camera and experiment settings first — see [Software](Software/)
   SDK version is installed, and the camera serial number matches the connected device.
 - **Rotary encoder not responding** — check the RJ45 connection to the Harp Behaviour Board and that
   the encoder is on the correct input pins.
+- **Recording stops at once with "The system cannot find the file specified"** — FFmpeg is not
+  installed, or not on PATH for this Windows account. Install it as in step 2 of
+  [Installing the software](#installing-the-software), then restart Bonsai.
+- **Recording stops with "Pipe is broken"** — FFmpeg started but stopped encoding. At the start of a
+  recording, the black console window shows why, usually that Intel Quick Sync is unavailable on this
+  machine; run `Setup.cmd` again to check. Mid-session, the console window was probably closed.
 - **Preview or CSV window missing** — reopen them manually, as below.
 
 ### Reopening the camera preview
 
 1. Right-click the **Logging** node and select **Show Default Editor...**
 2. In the editor window, right-click the **LogVideo** node and select **Show Default Editor...**
-3. Right-click the **VideoWriter** node and select:
+3. Right-click the **SampleInterval** node fed by **Value.Image** and select:
    - **Show Visualizer**
    - **Bonsai.Vision.Design.IplImageVisualizer**
 
 ### Reopening the CSV output
 
-1. Right-click the **CsvWriter** node.
+1. In the same **LogVideo** editor, right-click the **SampleInterval** node fed by the
+   **ExpressionTransform** that builds each CSV row.
 2. Select:
    - **Show Visualizer**
    - **Bonsai.Design.ObjectTextVisualizer**
+
+Both windows update five times a second rather than on every frame. Drawing all 50 frames a second
+takes CPU the recording needs, and the video and CSV still get every frame.
 
 > **Tip**
 >

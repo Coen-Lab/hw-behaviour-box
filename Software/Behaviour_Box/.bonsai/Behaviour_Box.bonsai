@@ -9,6 +9,7 @@
                  xmlns:sys="clr-namespace:System;assembly=mscorlib"
                  xmlns:cv="clr-namespace:Bonsai.Vision;assembly=Bonsai.Vision"
                  xmlns:io="clr-namespace:Bonsai.IO;assembly=Bonsai.System"
+                 xmlns:ffm="clr-namespace:Bonsai.FFmpeg;assembly=Bonsai.FFmpeg"
                  xmlns="https://bonsai-rx.org/2018/workflow">
   <Workflow>
     <Nodes>
@@ -377,18 +378,12 @@
                     <Property Name="FrameRate" />
                   </Expression>
                   <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:VideoWriter">
-                      <cv:FileName />
-                      <cv:Suffix>None</cv:Suffix>
-                      <cv:Buffered>true</cv:Buffered>
-                      <cv:Overwrite>true</cv:Overwrite>
-                      <cv:FourCC>FMP4</cv:FourCC>
-                      <cv:FrameRate>50</cv:FrameRate>
-                      <cv:FrameSize>
-                        <cv:Width>0</cv:Width>
-                        <cv:Height>0</cv:Height>
-                      </cv:FrameSize>
-                      <cv:ResizeInterpolation>NearestNeighbor</cv:ResizeInterpolation>
+                    <Combinator xsi:type="ffm:VideoWriter">
+                      <ffm:FileName />
+                      <ffm:Suffix>None</ffm:Suffix>
+                      <ffm:Overwrite>true</ffm:Overwrite>
+                      <ffm:FrameRate>50</ffm:FrameRate>
+                      <ffm:OutputArguments>-loglevel error -nostats -c:v h264_qsv -preset veryfast -global_quality 20 -bf 0 -pix_fmt nv12</ffm:OutputArguments>
                     </Combinator>
                   </Expression>
                   <Expression xsi:type="WorkflowOutput" />
@@ -499,24 +494,6 @@ Item2 as WheelDistance)</scr:Expression>
                     </Combinator>
                   </Expression>
                   <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:FindContours">
-                      <cv:Mode>External</cv:Mode>
-                      <cv:Method>ChainApproxNone</cv:Method>
-                      <cv:Offset>
-                        <cv:X>0</cv:X>
-                        <cv:Y>0</cv:Y>
-                      </cv:Offset>
-                      <cv:MinArea xsi:nil="true" />
-                      <cv:MaxArea xsi:nil="true" />
-                    </Combinator>
-                  </Expression>
-                  <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:BinaryRegionAnalysis" />
-                  </Expression>
-                  <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:LargestBinaryRegion" />
-                  </Expression>
-                  <Expression xsi:type="Combinator">
                     <Combinator xsi:type="cv:Centroid" />
                   </Expression>
                   <Expression xsi:type="rx:BehaviorSubject">
@@ -525,9 +502,19 @@ Item2 as WheelDistance)</scr:Expression>
                   <Expression xsi:type="ExternalizedMapping">
                     <Property Name="ThresholdValue" DisplayName="TrackingThreshold" Description="Pixels darker than this are treated as the mouse. Raise it for a lighter image or a lighter animal, lower it for a darker one." Category="Tracking" />
                   </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:SampleInterval">
+                      <rx:Interval>PT0.2S</rx:Interval>
+                    </Combinator>
+                  </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:SampleInterval">
+                      <rx:Interval>PT0.2S</rx:Interval>
+                    </Combinator>
+                  </Expression>
                   </Nodes>
                 <Edges>
-                  <Edge From="30" To="24" Label="Source1" />
+                  <Edge From="27" To="24" Label="Source1" />
                   <Edge From="0" To="3" Label="Source1" />
                   <Edge From="1" To="2" Label="Source1" />
                   <Edge From="2" To="3" Label="Source2" />
@@ -558,10 +545,9 @@ Item2 as WheelDistance)</scr:Expression>
                   <Edge From="23" To="24" Label="Source1" />
                   <Edge From="24" To="25" Label="Source1" />
                   <Edge From="25" To="26" Label="Source1" />
-                  <Edge From="26" To="27" Label="Source1" />
-                  <Edge From="27" To="28" Label="Source1" />
-                  <Edge From="28" To="29" Label="Source1" />
-                  </Edges>
+                  <Edge From="4" To="28" Label="Source1" />
+                  <Edge From="19" To="29" Label="Source1" />
+                </Edges>
               </Workflow>
             </Expression>
             <Expression xsi:type="ExternalizedMapping">

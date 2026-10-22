@@ -1,11 +1,13 @@
 # Software
 
-Two components:
+Three components:
 
 - **Spinnaker SDK (SpinView)** — camera driver and configuration
+- **FFmpeg** — video encoding, started by Bonsai for each recording
 - **Bonsai** — acquisition, encoder recording, trigger control and data saving
 
-Install them in that order: Bonsai cannot see the camera without the Spinnaker driver.
+Install them in that order: Bonsai cannot see the camera without the Spinnaker driver, and `Setup.cmd`
+checks FFmpeg.
 
 ---
 
@@ -32,9 +34,11 @@ An account is needed, so this step cannot be scripted and must be done by hand.
 
 ## Bonsai
 
-Run [`Setup.cmd`](Setup.cmd) once. It downloads Bonsai and restores
-the packages listed in `Bonsai.config` from nuget.org and `local_packages/`, so nothing else needs
-installing by hand.
+Install FFmpeg first, which encodes the video: run `winget install --id Gyan.FFmpeg -e` and open a
+new terminal so it is on PATH. That installs it for the current Windows account only; add
+`--scope machine`, from an administrator terminal, if other accounts record on the same computer. Then run [`Setup.cmd`](Setup.cmd) once. It downloads Bonsai, restores
+the packages listed in `Bonsai.config` from nuget.org and `local_packages/`, and checks that FFmpeg can
+encode with Intel Quick Sync.
 
 Then, because of compatibility patches in this project, open the workflow manually rather than
 launching it directly:
@@ -78,7 +82,8 @@ Each recording gets its own folder, built from the settings above:
 
 The date is the UTC time at which the workflow started, so a late-evening session in British
 Summer Time files under the following day. The folder holds `LogData.csv` and
-`VideoData_Camera.avi`, the video written as MPEG-4 Part 2 in an AVI container.
+`VideoData_Camera.avi`, the video written as H.264 in an AVI container (see
+[Video encoding](#video-encoding)).
 
 The CSV has one row per camera frame, with a header:
 
@@ -194,11 +199,45 @@ camera. Changing it means changing three things together, or the recordings go w
 
 Check the exposure still fits inside the new frame period.
 
+### Video encoding
+
+The `VideoWriter` node in **logging** then **LogVideo** comes from `Bonsai.FFmpeg`. It does not
+compress anything itself: it starts `ffmpeg.exe` and streams the raw frames to it, and ffmpeg encodes
+H.264 on Intel Quick Sync, the hardware encoder in Intel's integrated graphics. A black console window
+opens with each recording; that is ffmpeg, and it shows the reason if encoding fails. Leave it open
+and do not type in it: closing it, or pressing `q` or Ctrl+C in it, stops ffmpeg, and the recording
+stops with "Pipe is broken". If ffmpeg is not installed at all, no window opens and the recording
+stops at once with "The system cannot find the file specified".
+
+Encoding used to happen inside Bonsai, on a single thread that needed most of a CPU core at 1440 x
+1080 and 50 Hz. Whenever anything else was running it fell behind, the unwritten frames queued in
+memory, and long sessions crashed once RAM filled. Quick Sync keeps up with CPU to spare.
+
+The encoder settings are the node's `OutputArguments`:
+
+```
+-loglevel error -nostats -c:v h264_qsv -preset veryfast -global_quality 20 -bf 0 -pix_fmt nv12
+```
+
+`-global_quality` trades size against quality: lower is better and larger. On a machine without
+Quick Sync, such as one with an AMD CPU, use the CPU encoder x264 instead, which spreads the work
+across all cores and produces larger files:
+
+```
+-loglevel error -nostats -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p
+```
+
 ## Mouse centroid tracking
 
 Position is estimated by **centroid tracking**. Compared with pose estimation or segmentation it is
 computationally light, robust, and accurate enough for locomotion, which suits a standardised
 screening platform.
+
+The workflow thresholds each frame at `TrackingThreshold` and takes the centre of mass of every pixel
+darker than it. There is no blob detection, so the position never jumps between pieces of the animal
+when the body and a headstage or cable split apart against a wall. The flip side is that anything
+dark in view pulls the centroid towards it, in proportion to its area: faeces, a dark cable, or a
+corner the IR strip does not reach. Keep the box clean and evenly lit.
 
 The centroid is in pixels, and nothing in the recording converts it to distance. The arena floor is
 a 200 mm square, which gets you an approximate scale, but for anything quantitative calibrate your
