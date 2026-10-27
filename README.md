@@ -202,6 +202,7 @@ takes CPU the recording needs, and the video and CSV still get every frame.
 Released under the [MIT License](LICENSE), which covers the printed design as well as the workflow
 and the documentation.
 
-The five UclOpen packages in `local_packages/` are redistributed under the BSD 3-Clause License, and
-everything `Setup.cmd` downloads stays under its own terms. See
+The five UclOpen packages in `local_packages/` are redistributed under the BSD 3-Clause License and
+the patched Bonsai.FFmpeg package there under the MIT License, and everything `Setup.cmd` downloads
+stays under its own terms. See
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

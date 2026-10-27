@@ -92,7 +92,7 @@ The CSV has one row per camera frame, with a header:
 | `Seconds` | Harp clock time of the frame trigger, in seconds |
 | `Timestamp` | Camera chunk timestamp |
 | `FrameID` | Camera frame counter |
-| `ExposureTime` | Exposure of that frame, from the camera chunk |
+| `ExposureTime` | Exposure set in the workflow (`ExposureTime` property), in microseconds |
 | `MouseLocation.X` | Mouse centroid, pixels from the left edge of the image |
 | `MouseLocation.Y` | Mouse centroid, pixels from the top edge of the image |
 | `WheelDistance` | Cumulative distance run since the recording started, in cm |
@@ -107,17 +107,19 @@ correct answer rather than a fault. Occasional `NaN` mid-session means the anima
 lost; a session that is entirely `NaN` with an animal present means the threshold needs raising for
 the current lighting.
 
-`Seconds` is the Harp board's own record of when it fired the trigger, matched to the frame by
-arrival order rather than by any shared identifier. That holds as long as every trigger produces a
-frame. If one ever does not, each frame after it takes the timestamp of the frame before, and
-nothing in the file announces it. To check a session, compare the camera's own `Timestamp` against
-`Seconds`: the offset between the two clocks should be flat, and a step of one frame period means
-the pairing has slipped.
+`Seconds` is the Harp board's own record of when it fired the trigger. Frames are matched to
+triggers in the camera node itself (UclOpen's `TriggeredSpinnaker` with the trigger events as its
+input): gaps in `FrameID` are filled before pairing, so a frame the computer drops leaves a gap in
+`FrameID` and every later row keeps its correct `Seconds`. Only Harp `Event` messages count as
+triggers, and the Harp starts triggering 5 s after **Start**, once the camera is armed, so the
+first row is paired correctly too. To check a session, compare the camera's own `Timestamp` against
+`Seconds`: the offset between the two clocks should be a straight line (the two clocks drift by
+about 15 ppm), and a step of one frame period means the pairing has slipped.
 
-Expect the **first row to be wrong** and discard it. Logging starts against a camera that is already
-being triggered, so the first frame is paired with a trigger event that arrived before it, and its
-`Seconds` can be most of a second early. `FrameID` stays contiguous across it, confirming no frame
-was lost. From the second row on, the offset locks and stays flat.
+The frame's `FrameID` and `Timestamp` are copied inside the camera callback. Reading the camera's
+chunk data later, after Spinnaker has released the image, crashed Bonsai on the second or later
+**Start** in a session, so do not go back to the `UclOpen.Devices:TriggeredSpinnaker.bonsai`
+include, which does exactly that.
 
 Acquisition constants, all set in the workflow:
 
@@ -211,6 +213,10 @@ Closing the window, or pressing Ctrl+C in it, kills Bonsai and ffmpeg together w
 video up to that moment is finalised and plays, but the CSV loses its unwritten last second or so.
 Pressing **Stop** in Bonsai is safe: ffmpeg finishes the file within a second. If ffmpeg is not
 installed at all, the recording stops at once with "The system cannot find the file specified".
+The package is a patched `Bonsai.FFmpeg` 0.2.0 from `local_packages/` (version `0.2.0-uniquepipe`):
+the nuget.org build names its pipe after the video file, so pressing **Start** while the previous
+recording was still being encoded failed with "All pipe instances are busy." and needed a Bonsai
+restart.
 
 Encoding used to happen inside Bonsai, on a single thread that needed most of a CPU core at 1440 x
 1080 and 50 Hz. Whenever anything else was running it fell behind, the unwritten frames queued in
