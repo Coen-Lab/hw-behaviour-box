@@ -35,6 +35,30 @@ else {
     Write-Host "Spinnaker SDK $requiredSpinnaker found."
 }
 
+# The video is encoded by ffmpeg.exe, which Bonsai.FFmpeg starts from PATH. The workflow
+# uses Intel Quick Sync (h264_qsv), so also check this machine can actually encode with it.
+$ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
+if (-not $ffmpeg) {
+    Write-Host ""
+    Write-Warning "FFmpeg was not found on PATH."
+    Write-Host "  Recording will stop at once with 'The system cannot find the file specified'. Install it with:"
+    Write-Host "  winget install --id Gyan.FFmpeg -e"
+    Write-Host "  then open a new window so PATH is refreshed, and run this setup again."
+    Write-Host ""
+}
+else {
+    & $ffmpeg.Source -v error -f lavfi -i color=black:s=320x240 -frames:v 1 -c:v h264_qsv -f null - 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "FFmpeg found, Intel Quick Sync encoding works."
+    }
+    else {
+        Write-Host ""
+        Write-Warning "FFmpeg is installed, but Intel Quick Sync (h264_qsv) does not work on this machine."
+        Write-Host "  Switch the video encoder to x264 as described under 'Video encoding' in Software/README.md."
+        Write-Host ""
+    }
+}
+
 # The UclOpen packages are not on nuget.org, so the restore below fails with an
 # unhelpful NuGet error if this folder is missing.
 $localPackages = Join-Path $PSScriptRoot '../local_packages'

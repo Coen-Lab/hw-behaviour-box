@@ -30,7 +30,7 @@
       <ObjectTextVisualizer />
     </VisualizerSettings>
     <NestedLayout>
-      <WindowSettings Index="4">
+      <WindowSettings Index="5">
         <Visible>false</Visible>
         <Location>
           <X>1495</X>
@@ -45,7 +45,7 @@
           <IplImageVisualizer />
         </VisualizerSettings>
         <NestedLayout>
-          <WindowSettings Index="9">
+          <WindowSettings Index="28">
             <Location>
               <X>315</X>
               <Y>232</Y>
@@ -59,7 +59,7 @@
               <IplImageVisualizer />
             </VisualizerSettings>
           </WindowSettings>
-          <WindowSettings Index="22">
+          <WindowSettings Index="29">
             <Location>
               <X>717</X>
               <Y>376</Y>
@@ -71,21 +71,6 @@
             <VisualizerTypeName>Bonsai.Design.ObjectTextVisualizer</VisualizerTypeName>
             <VisualizerSettings>
               <ObjectTextVisualizer />
-            </VisualizerSettings>
-          </WindowSettings>
-          <WindowSettings Index="26">
-            <Visible>false</Visible>
-            <Location>
-              <X>52</X>
-              <Y>52</Y>
-            </Location>
-            <Size>
-              <Width>336</Width>
-              <Height>279</Height>
-            </Size>
-            <VisualizerTypeName>Bonsai.Vision.Design.ConnectedComponentCollectionVisualizer</VisualizerTypeName>
-            <VisualizerSettings>
-              <ConnectedComponentCollectionVisualizer />
             </VisualizerSettings>
           </WindowSettings>
         </NestedLayout>

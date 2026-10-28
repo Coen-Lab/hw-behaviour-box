@@ -8,7 +8,10 @@
                  xmlns:scr="clr-namespace:Bonsai.Scripting.Expressions;assembly=Bonsai.Scripting.Expressions"
                  xmlns:sys="clr-namespace:System;assembly=mscorlib"
                  xmlns:cv="clr-namespace:Bonsai.Vision;assembly=Bonsai.Vision"
+                 xmlns:p1="clr-namespace:UclOpen.Video;assembly=UclOpen.Video"
+                 xmlns:spk="clr-namespace:Bonsai.Spinnaker;assembly=Bonsai.Spinnaker"
                  xmlns:io="clr-namespace:Bonsai.IO;assembly=Bonsai.System"
+                 xmlns:ffm="clr-namespace:Bonsai.FFmpeg;assembly=Bonsai.FFmpeg"
                  xmlns="https://bonsai-rx.org/2018/workflow">
   <Workflow>
     <Nodes>
@@ -202,7 +205,7 @@
                   </Expression>
                   <Expression xsi:type="Combinator">
                     <Combinator xsi:type="rx:Delay">
-                      <rx:DueTime>PT1S</rx:DueTime>
+                      <rx:DueTime>PT5S</rx:DueTime>
                     </Combinator>
                   </Expression>
                   <Expression xsi:type="MulticastSubject">
@@ -230,14 +233,98 @@
               <Property Name="SerialNumber" />
               <Property Name="Binning" />
             </Expression>
-            <Expression xsi:type="IncludeWorkflow" Path="UclOpen.Devices:TriggeredSpinnaker.bonsai">
-              <ExposureTime>10000</ExposureTime>
-              <Gain>5</Gain>
-              <Binning>1</Binning>
-              <SerialNumber />
-              <ColorProcessing>Default</ColorProcessing>
-              <CameraTriggerEventsSubjectName>Camera0TriggerEvents</CameraTriggerEventsSubjectName>
-              <FrameEventsSubjectName>FrameEvents</FrameEventsSubjectName>
+            <Expression xsi:type="GroupWorkflow">
+              <Name>TriggeredSpinnaker</Name>
+              <Description>Inline replacement for UclOpen.Devices:TriggeredSpinnaker.bonsai. Trigger events are Harp Event messages only (the register-dump Read reply of Camera0Frame is not a trigger). The camera node takes them as input, i.e. UclOpen TriggeredSpinnaker.Generate&lt;TPayload&gt;: FrameID and Timestamp are copied inside the camera callback (reading the live ManagedChunkData after Release crashed Bonsai) and FrameID gaps are filled before frames are zipped with triggers, so a dropped frame no longer shifts later timestamps. ExposureTime is the configured value. The Timeout after the camera stops the workflow with &quot;The operation has timed out.&quot; if no frame arrives for 15 s, including the first one after Start, so a camera that gets no trigger pulses (trigger cable) is not mistaken for a recording.</Description>
+              <Workflow>
+                <Nodes>
+                  <Expression xsi:type="ExternalizedMapping">
+                    <Property Name="Gain" />
+                    <Property Name="Binning" />
+                    <Property Name="SerialNumber" />
+                    <Property Name="ColorProcessing" />
+                  </Expression>
+                  <Expression xsi:type="SubscribeSubject">
+                    <Name>BehaviorEvents</Name>
+                  </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="harp:FilterMessageType">
+                      <harp:FilterType>Include</harp:FilterType>
+                      <harp:MessageType>Event</harp:MessageType>
+                    </Combinator>
+                  </Expression>
+                  <Expression xsi:type="beh:Parse">
+                    <harp:Register xsi:type="beh:TimestampedCamera0Frame" />
+                  </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="p1:TriggeredSpinnaker">
+                      <spk:Index xsi:nil="true" />
+                      <spk:SerialNumber />
+                      <spk:ColorProcessing>Default</spk:ColorProcessing>
+                      <p1:ExposureTime>10000</p1:ExposureTime>
+                      <p1:Gain>5</p1:Gain>
+                      <p1:Binning>1</p1:Binning>
+                    </Combinator>
+                  </Expression>
+                  <Expression xsi:type="GroupWorkflow">
+                    <Name>ExposureTime</Name>
+                    <Workflow>
+                      <Nodes>
+                        <Expression xsi:type="ExternalizedMapping">
+                          <Property Name="Value" DisplayName="ExposureTime" />
+                        </Expression>
+                        <Expression xsi:type="Combinator">
+                          <Combinator xsi:type="DoubleProperty">
+                            <Value>10000</Value>
+                          </Combinator>
+                        </Expression>
+                        <Expression xsi:type="WorkflowOutput" />
+                      </Nodes>
+                      <Edges>
+                        <Edge From="0" To="1" Label="Source1" />
+                        <Edge From="1" To="2" Label="Source1" />
+                      </Edges>
+                    </Workflow>
+                  </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:WithLatestFrom" />
+                  </Expression>
+                  <Expression xsi:type="scr:ExpressionTransform">
+                    <scr:Expression>new(
+Item1.Seconds as Seconds,
+new(Item1.Value.Image as Image,
+new(Item1.Value.ChunkData.FrameID as FrameID,
+Item1.Value.ChunkData.Timestamp as Timestamp,
+Item2 as ExposureTime,
+Item1.Value.Image.Width as Width,
+Item1.Value.Image.Height as Height) as ChunkData) as Value)</scr:Expression>
+                  </Expression>
+                  <Expression xsi:type="rx:BehaviorSubject">
+                    <Name>FrameEvents</Name>
+                  </Expression>
+                  <Expression xsi:type="ExternalizedMapping">
+                    <Property Name="ExposureTime" />
+                  </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:Timeout">
+                      <rx:DueTime>PT15S</rx:DueTime>
+                    </Combinator>
+                  </Expression>
+                </Nodes>
+                <Edges>
+                  <Edge From="0" To="4" Label="Source1" />
+                  <Edge From="1" To="2" Label="Source1" />
+                  <Edge From="2" To="3" Label="Source1" />
+                  <Edge From="3" To="4" Label="Source1" />
+                  <Edge From="4" To="10" Label="Source1" />
+                  <Edge From="10" To="6" Label="Source1" />
+                  <Edge From="5" To="6" Label="Source2" />
+                  <Edge From="6" To="7" Label="Source1" />
+                  <Edge From="7" To="8" Label="Source1" />
+                  <Edge From="9" To="4" Label="Source1" />
+                  <Edge From="9" To="5" Label="Source1" />
+                </Edges>
+              </Workflow>
             </Expression>
             <Expression xsi:type="SubscribeSubject">
               <Name>FrameEvents</Name>
@@ -377,18 +464,12 @@
                     <Property Name="FrameRate" />
                   </Expression>
                   <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:VideoWriter">
-                      <cv:FileName />
-                      <cv:Suffix>None</cv:Suffix>
-                      <cv:Buffered>true</cv:Buffered>
-                      <cv:Overwrite>true</cv:Overwrite>
-                      <cv:FourCC>FMP4</cv:FourCC>
-                      <cv:FrameRate>50</cv:FrameRate>
-                      <cv:FrameSize>
-                        <cv:Width>0</cv:Width>
-                        <cv:Height>0</cv:Height>
-                      </cv:FrameSize>
-                      <cv:ResizeInterpolation>NearestNeighbor</cv:ResizeInterpolation>
+                    <Combinator xsi:type="ffm:VideoWriter">
+                      <ffm:FileName />
+                      <ffm:Suffix>None</ffm:Suffix>
+                      <ffm:Overwrite>true</ffm:Overwrite>
+                      <ffm:FrameRate>50</ffm:FrameRate>
+                      <ffm:OutputArguments>-loglevel error -nostats -c:v h264_qsv -preset veryfast -global_quality 20 -bf 0 -pix_fmt nv12</ffm:OutputArguments>
                     </Combinator>
                   </Expression>
                   <Expression xsi:type="WorkflowOutput" />
@@ -499,24 +580,6 @@ Item2 as WheelDistance)</scr:Expression>
                     </Combinator>
                   </Expression>
                   <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:FindContours">
-                      <cv:Mode>External</cv:Mode>
-                      <cv:Method>ChainApproxNone</cv:Method>
-                      <cv:Offset>
-                        <cv:X>0</cv:X>
-                        <cv:Y>0</cv:Y>
-                      </cv:Offset>
-                      <cv:MinArea xsi:nil="true" />
-                      <cv:MaxArea xsi:nil="true" />
-                    </Combinator>
-                  </Expression>
-                  <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:BinaryRegionAnalysis" />
-                  </Expression>
-                  <Expression xsi:type="Combinator">
-                    <Combinator xsi:type="cv:LargestBinaryRegion" />
-                  </Expression>
-                  <Expression xsi:type="Combinator">
                     <Combinator xsi:type="cv:Centroid" />
                   </Expression>
                   <Expression xsi:type="rx:BehaviorSubject">
@@ -525,9 +588,19 @@ Item2 as WheelDistance)</scr:Expression>
                   <Expression xsi:type="ExternalizedMapping">
                     <Property Name="ThresholdValue" DisplayName="TrackingThreshold" Description="Pixels darker than this are treated as the mouse. Raise it for a lighter image or a lighter animal, lower it for a darker one." Category="Tracking" />
                   </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:SampleInterval">
+                      <rx:Interval>PT0.2S</rx:Interval>
+                    </Combinator>
+                  </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:SampleInterval">
+                      <rx:Interval>PT0.2S</rx:Interval>
+                    </Combinator>
+                  </Expression>
                   </Nodes>
                 <Edges>
-                  <Edge From="30" To="24" Label="Source1" />
+                  <Edge From="27" To="24" Label="Source1" />
                   <Edge From="0" To="3" Label="Source1" />
                   <Edge From="1" To="2" Label="Source1" />
                   <Edge From="2" To="3" Label="Source2" />
@@ -558,10 +631,9 @@ Item2 as WheelDistance)</scr:Expression>
                   <Edge From="23" To="24" Label="Source1" />
                   <Edge From="24" To="25" Label="Source1" />
                   <Edge From="25" To="26" Label="Source1" />
-                  <Edge From="26" To="27" Label="Source1" />
-                  <Edge From="27" To="28" Label="Source1" />
-                  <Edge From="28" To="29" Label="Source1" />
-                  </Edges>
+                  <Edge From="4" To="28" Label="Source1" />
+                  <Edge From="19" To="29" Label="Source1" />
+                </Edges>
               </Workflow>
             </Expression>
             <Expression xsi:type="ExternalizedMapping">

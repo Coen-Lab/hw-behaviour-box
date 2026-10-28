@@ -1,11 +1,13 @@
 # Software
 
-Two components:
+Three components:
 
 - **Spinnaker SDK (SpinView)** — camera driver and configuration
+- **FFmpeg** — video encoding, started by Bonsai for each recording
 - **Bonsai** — acquisition, encoder recording, trigger control and data saving
 
-Install them in that order: Bonsai cannot see the camera without the Spinnaker driver.
+Install them in that order: Bonsai cannot see the camera without the Spinnaker driver, and `Setup.cmd`
+checks FFmpeg.
 
 ---
 
@@ -32,9 +34,11 @@ An account is needed, so this step cannot be scripted and must be done by hand.
 
 ## Bonsai
 
-Run [`Setup.cmd`](Setup.cmd) once. It downloads Bonsai and restores
-the packages listed in `Bonsai.config` from nuget.org and `local_packages/`, so nothing else needs
-installing by hand.
+Install FFmpeg first, which encodes the video: run `winget install --id Gyan.FFmpeg -e` and open a
+new terminal so it is on PATH. That installs it for the current Windows account only; add
+`--scope machine`, from an administrator terminal, if other accounts record on the same computer. Then run [`Setup.cmd`](Setup.cmd) once. It downloads Bonsai, restores
+the packages listed in `Bonsai.config` from nuget.org and `local_packages/`, and checks that FFmpeg can
+encode with Intel Quick Sync.
 
 Then, because of compatibility patches in this project, open the workflow manually rather than
 launching it directly:
@@ -78,7 +82,8 @@ Each recording gets its own folder, built from the settings above:
 
 The date is the UTC time at which the workflow started, so a late-evening session in British
 Summer Time files under the following day. The folder holds `LogData.csv` and
-`VideoData_Camera.avi`, the video written as MPEG-4 Part 2 in an AVI container.
+`VideoData_Camera.avi`, the video written as H.264 in an AVI container (see
+[Video encoding](#video-encoding)).
 
 The CSV has one row per camera frame, with a header:
 
@@ -87,7 +92,7 @@ The CSV has one row per camera frame, with a header:
 | `Seconds` | Harp clock time of the frame trigger, in seconds |
 | `Timestamp` | Camera chunk timestamp |
 | `FrameID` | Camera frame counter |
-| `ExposureTime` | Exposure of that frame, from the camera chunk |
+| `ExposureTime` | Exposure set in the workflow (`ExposureTime` property), in microseconds |
 | `MouseLocation.X` | Mouse centroid, pixels from the left edge of the image |
 | `MouseLocation.Y` | Mouse centroid, pixels from the top edge of the image |
 | `WheelDistance` | Cumulative distance run since the recording started, in cm |
@@ -102,17 +107,31 @@ correct answer rather than a fault. Occasional `NaN` mid-session means the anima
 lost; a session that is entirely `NaN` with an animal present means the threshold needs raising for
 the current lighting.
 
-`Seconds` is the Harp board's own record of when it fired the trigger, matched to the frame by
-arrival order rather than by any shared identifier. That holds as long as every trigger produces a
-frame. If one ever does not, each frame after it takes the timestamp of the frame before, and
-nothing in the file announces it. To check a session, compare the camera's own `Timestamp` against
-`Seconds`: the offset between the two clocks should be flat, and a step of one frame period means
-the pairing has slipped.
+`Seconds` is the Harp board's own record of when it fired the trigger. Frames are matched to
+triggers in the camera node itself (UclOpen's `TriggeredSpinnaker` with the trigger events as its
+input): gaps in `FrameID` are filled before pairing, so a frame the computer drops leaves a gap in
+`FrameID` and every later row keeps its correct `Seconds`. Only Harp `Event` messages count as
+triggers, and the Harp starts triggering 5 s after **Start**, once the camera is armed, so the
+first row is paired correctly too. To check a session, compare the camera's own `Timestamp` against
+`Seconds`: the offset between the two clocks should be a straight line (the two clocks drift by
+about 15 ppm), and a step of one frame period means the pairing has slipped.
 
-Expect the **first row to be wrong** and discard it. Logging starts against a camera that is already
-being triggered, so the first frame is paired with a trigger event that arrived before it, and its
-`Seconds` can be most of a second early. `FrameID` stays contiguous across it, confirming no frame
-was lost. From the second row on, the offset locks and stays flat.
+A dropped frame is missing from the video as well as the CSV, so CSV row n is still video frame n,
+but the video's own clock (a fixed 50 frames a second) runs 20 ms ahead for every frame dropped
+before that point: time events with `Seconds`, not with the video's timestamps. Filling gaps only
+protects against frames the computer drops, which leave a gap in `FrameID`. A trigger the camera
+itself misses (exposure longer than the frame period, see
+[Exposure time, gain and binning](#exposure-time-gain-and-binning)) or a Harp event that never
+arrives leaves no gap, and still shifts every later row; the offset check above shows it as a step.
+
+If no frame arrives for 15 s, the first one after **Start** included, a `Timeout` after the camera
+stops the workflow with "The operation has timed out.", so a camera that gets no trigger pulses
+(usually the trigger cable) cannot pass for a recording.
+
+The frame's `FrameID` and `Timestamp` are copied inside the camera callback. Reading the camera's
+chunk data later, after Spinnaker has released the image, crashed Bonsai on the second or later
+**Start** in a session, so do not go back to the `UclOpen.Devices:TriggeredSpinnaker.bonsai`
+include, which does exactly that.
 
 Acquisition constants, all set in the workflow:
 
@@ -164,13 +183,16 @@ The order to tune them in is exposure first, then gain, then binning:
 
 ### A cropped image
 
-The workflow sets binning but not the region of interest, because `TriggeredSpinnaker` does not
-expose one. `OffsetX`, `OffsetY`, `Width` and `Height` are therefore whatever is stored on the
-camera, and Bonsai accepts them. A camera left with a small region records a cropped frame, and the
-CSV looks identical either way.
+The workflow resets the region of interest itself: after setting binning, its `TriggeredSpinnaker`
+sets `OffsetX` and `OffsetY` to 0 and `Width` and `Height` to their maxima, so every recording uses
+the full sensor (1440 x 1080 at binning 1, 720 x 540 at binning 2) whatever region is stored on the
+camera. This needs the patched `UclOpen.Video` 0.0.0-sandbox-fullframe package that `Setup.cmd`
+restores from `local_packages/`; the unpatched UclOpen package sets binning only and records a
+cropped frame from a camera left with a small region.
 
-The trap is that changing binning in SpinView does not re-expand the region. It stays at its old
-pixel values, so the image crops rather than rescaling. To reset it, with Bonsai closed:
+The camera's stored region still matters to other software such as SpinView, because changing
+binning there does not re-expand the region. It stays at its old pixel values, so the image crops
+rather than rescaling. To reset it, with Bonsai closed:
 
 1. Set `OffsetX` and `OffsetY` to 0. The offsets must come down before the size can go up.
 2. Set `Width` and `Height` to their maxima. At binning 1 that is 1440 x 1080.
@@ -194,11 +216,57 @@ camera. Changing it means changing three things together, or the recordings go w
 
 Check the exposure still fits inside the new frame period.
 
+### Video encoding
+
+The `VideoWriter` node in **logging** then **LogVideo** comes from `Bonsai.FFmpeg`. It does not
+compress anything itself: it starts `ffmpeg.exe` and streams the raw frames to it, and ffmpeg encodes
+H.264 on Intel Quick Sync, the hardware encoder in Intel's integrated graphics. `Bonsai.exe` is a
+console program, so a black console window is open beside the editor from launch; ffmpeg shares it
+and prints only errors there (`OutputArguments` passes `-nostats -loglevel error`), so that window
+shows the reason if encoding fails. Leave it open and do not
+type in it. Pressing `q` in it stops ffmpeg alone, and the recording stops with "Pipe is broken".
+Closing the window, or pressing Ctrl+C in it, kills Bonsai and ffmpeg together with no message: the
+video up to that moment is finalised and plays, but the CSV loses its unwritten last second or so.
+Pressing **Stop** in Bonsai is safe: ffmpeg finishes the file once it has encoded the frames still
+queued, usually within a second, longer on a busy computer. If Bonsai dies before then (the console
+window closed, or a crash), the end of the video is lost: in one shutdown crash under heavy CPU load
+the CSV kept all 1,806 rows and the video only 1,118 frames. Wait until `ffmpeg.exe` has gone from
+Task Manager before closing Bonsai. If ffmpeg is not
+installed at all, the recording stops at once with "The system cannot find the file specified".
+The package is a patched `Bonsai.FFmpeg` 0.2.0 from `local_packages/` (version `0.2.0-uniquepipe`):
+the nuget.org build names its pipe after the video file, so pressing **Start** while the previous
+recording was still being encoded failed with "All pipe instances are busy." and needed a Bonsai
+restart.
+
+Encoding used to happen inside Bonsai, on a single thread that needed most of a CPU core at 1440 x
+1080 and 50 Hz. Whenever anything else was running it fell behind, the unwritten frames queued in
+memory, and long sessions crashed once RAM filled. Quick Sync keeps up with CPU to spare.
+
+The encoder settings are the node's `OutputArguments`:
+
+```
+-loglevel error -nostats -c:v h264_qsv -preset veryfast -global_quality 20 -bf 0 -pix_fmt nv12
+```
+
+`-global_quality` trades size against quality: lower is better and larger. On a machine without
+Quick Sync, such as one with an AMD CPU, use the CPU encoder x264 instead, which spreads the work
+across all cores and produces larger files:
+
+```
+-loglevel error -nostats -c:v libx264 -preset ultrafast -crf 18 -pix_fmt yuv420p
+```
+
 ## Mouse centroid tracking
 
 Position is estimated by **centroid tracking**. Compared with pose estimation or segmentation it is
 computationally light, robust, and accurate enough for locomotion, which suits a standardised
 screening platform.
+
+The workflow thresholds each frame at `TrackingThreshold` and takes the centre of mass of every pixel
+darker than it. There is no blob detection, so the position never jumps between pieces of the animal
+when the body and a headstage or cable split apart against a wall. The flip side is that anything
+dark in view pulls the centroid towards it, in proportion to its area: faeces, a dark cable, or a
+corner the IR strip does not reach. Keep the box clean and evenly lit.
 
 The centroid is in pixels, and nothing in the recording converts it to distance. The arena floor is
 a 200 mm square, which gets you an approximate scale, but for anything quantitative calibrate your
