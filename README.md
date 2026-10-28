@@ -174,8 +174,7 @@ Configure the camera and experiment settings first — see [Software](Software/)
   `"C:\Program Files\Teledyne\Spinnaker\bin64\vs2015\SystemNodeConfig_v140.exe" EnumerateGEVInterfaces false`.
   It persists across restarts (it is stored in `C:\ProgramData\Spinnaker\Shared\GenTLSysReg.ini`).
   To undo it, delete `GenTLSysReg.ini` and `GenTLIfReg.ini` in that folder; running the same command
-  with `true` does not work. Coen Lab rigs set up with rig-setup (Rig_Behaviour-Box profile) get
-  this automatically.
+  with `true` does not work.
 - **Rotary encoder not responding** — check the RJ45 connection to the Harp Behaviour Board and that
   the encoder is on the correct input pins.
 - **Recording stops at once with "The system cannot find the file specified"** — FFmpeg is not
