@@ -235,7 +235,7 @@
             </Expression>
             <Expression xsi:type="GroupWorkflow">
               <Name>TriggeredSpinnaker</Name>
-              <Description>Inline replacement for UclOpen.Devices:TriggeredSpinnaker.bonsai. Trigger events are Harp Event messages only (the register-dump Read reply of Camera0Frame is not a trigger). The camera node takes them as input, i.e. UclOpen TriggeredSpinnaker.Generate&lt;TPayload&gt;: FrameID and Timestamp are copied inside the camera callback (reading the live ManagedChunkData after Release crashed Bonsai) and FrameID gaps are filled before frames are zipped with triggers, so a dropped frame no longer shifts later timestamps. ExposureTime is the configured value.</Description>
+              <Description>Inline replacement for UclOpen.Devices:TriggeredSpinnaker.bonsai. Trigger events are Harp Event messages only (the register-dump Read reply of Camera0Frame is not a trigger). The camera node takes them as input, i.e. UclOpen TriggeredSpinnaker.Generate&lt;TPayload&gt;: FrameID and Timestamp are copied inside the camera callback (reading the live ManagedChunkData after Release crashed Bonsai) and FrameID gaps are filled before frames are zipped with triggers, so a dropped frame no longer shifts later timestamps. ExposureTime is the configured value. The Timeout after the camera stops the workflow with &quot;The operation has timed out.&quot; if no frame arrives for 15 s, including the first one after Start, so a camera that gets no trigger pulses (trigger cable) is not mistaken for a recording.</Description>
               <Workflow>
                 <Nodes>
                   <Expression xsi:type="ExternalizedMapping">
@@ -305,13 +305,19 @@ Item1.Value.Image.Height as Height) as ChunkData) as Value)</scr:Expression>
                   <Expression xsi:type="ExternalizedMapping">
                     <Property Name="ExposureTime" />
                   </Expression>
+                  <Expression xsi:type="Combinator">
+                    <Combinator xsi:type="rx:Timeout">
+                      <rx:DueTime>PT15S</rx:DueTime>
+                    </Combinator>
+                  </Expression>
                 </Nodes>
                 <Edges>
                   <Edge From="0" To="4" Label="Source1" />
                   <Edge From="1" To="2" Label="Source1" />
                   <Edge From="2" To="3" Label="Source1" />
                   <Edge From="3" To="4" Label="Source1" />
-                  <Edge From="4" To="6" Label="Source1" />
+                  <Edge From="4" To="10" Label="Source1" />
+                  <Edge From="10" To="6" Label="Source1" />
                   <Edge From="5" To="6" Label="Source2" />
                   <Edge From="6" To="7" Label="Source1" />
                   <Edge From="7" To="8" Label="Source1" />

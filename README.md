@@ -136,7 +136,8 @@ Configure the camera and experiment settings first — see [Software](Software/)
    - Camera USB cable to the computer
    - Camera GPIO trigger cable to the Harp Behaviour Board
 
-3. Open the Bonsai workflow and check the **live camera preview** is updating.
+3. Open the Bonsai workflow. The camera preview only appears once the workflow is running, so it is
+   checked after **Start**, in step 7.
 
 4. Place the mouse in the box.
 
@@ -145,11 +146,17 @@ Configure the camera and experiment settings first — see [Software](Software/)
 6. Minimise external light — turn the room lights off, or cover the box with black fabric (**recommended**).
 
 7. Set the save directory, camera serial number, subject ID, session ID and trial length, then click
-   **Start**. Bonsai has a black console window open beside it from launch, titled with the path to
-   `Bonsai.exe`; FFmpeg prints its encoding progress there while recording. Leave it open and do not
-   type in it: closing it, or pressing Ctrl+C in it, closes Bonsai at once and ends the recording.
+   **Start**. The camera preview starts updating about 5 s later: the Harp board only starts the
+   camera's trigger pulses once the camera is ready. If no frame arrives within 15 s, Bonsai stops
+   with "The operation has timed out." (see [Troubleshooting](#troubleshooting)). Bonsai has a black
+   console window open beside it from launch, titled with the path to `Bonsai.exe`; FFmpeg prints
+   only errors there. Leave it open and do not type in it: closing it, or pressing Ctrl+C in it,
+   closes Bonsai at once and ends the recording.
 
 8. Recording stops automatically at the trial length, saving a video and a CSV of the behavioural data.
+   Bonsai itself keeps running, so press **Stop** before the next recording. The video can finish a
+   few seconds after the CSV, longer on a busy computer: before closing Bonsai, wait until
+   `ffmpeg.exe` has gone from Task Manager, or the end of the last video is lost.
 
 9. Return the mouse to its home cage.
 
@@ -168,9 +175,16 @@ Configure the camera and experiment settings first — see [Software](Software/)
   recording, the black console window shows why, usually that Intel Quick Sync is unavailable on this
   machine; run `Setup.cmd` again to check. Mid-session, someone probably typed in the console window
   (`q` stops FFmpeg).
+- **Bonsai stops about 15 s after Start with "The operation has timed out."** — no camera frame
+  arrived. The usual cause is the GPIO trigger cable between the camera and the Harp board (loose at
+  either end, or damaged); also check the camera's USB cable. The session folder holds only a
+  `LogData.csv` with its header and no rows; delete it. Fix the cable, then press **Start** again.
 - **Bonsai disappeared mid-recording with no message** — the console window was closed, or Ctrl+C was
   pressed in it. The video up to that moment is kept and plays; the CSV loses its last second or so,
   and its final line may be cut short.
+- **Bonsai closed itself just after Stop** — a rare crash while the camera driver shuts down (about
+  once in 500 recordings in testing). Start Bonsai again. The CSV of the recording just made is
+  complete, but its video may be missing its last seconds if ffmpeg was still encoding them.
 - **Preview or CSV window missing** — reopen them manually, as below.
 
 ### Reopening the camera preview
