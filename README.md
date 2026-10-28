@@ -166,6 +166,16 @@ Configure the camera and experiment settings first — see [Software](Software/)
 
 - **No live camera preview** — check the locking USB 3.0 cable is connected, the correct Spinnaker
   SDK version is installed, and the camera serial number matches the connected device.
+- **"Cannot find driver CORMEM.SYS (memory allocator)!" each time the camera starts** — Spinnaker is
+  searching for GigE cameras through Teledyne's GigE components (installed by an interactive
+  Spinnaker install), and their memory library needs a driver that only Teledyne's Sapera LT
+  installs. Bonsai waits on the dialog until someone clicks OK. The camera is USB3, so switch the
+  GigE search off once, with Bonsai and SpinView closed:
+  `"C:\Program Files\Teledyne\Spinnaker\bin64\vs2015\SystemNodeConfig_v140.exe" EnumerateGEVInterfaces false`.
+  It persists across restarts (it is stored in `C:\ProgramData\Spinnaker\Shared\GenTLSysReg.ini`).
+  To undo it, delete `GenTLSysReg.ini` and `GenTLIfReg.ini` in that folder; running the same command
+  with `true` does not work. Coen Lab rigs set up with rig-setup (Rig_Behaviour-Box profile) get
+  this automatically.
 - **Rotary encoder not responding** — check the RJ45 connection to the Harp Behaviour Board and that
   the encoder is on the correct input pins.
 - **Recording stops at once with "The system cannot find the file specified"** — FFmpeg is not
